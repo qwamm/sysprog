@@ -18,11 +18,19 @@ struct data_vector {
 
 /** Append @a count messages in @a data to the end of the vector. */
 static void data_vector_append_many(struct data_vector *vector,
-	const unsigned *data, size_t count)
-{
-	assert(vector->size + count <= vector->capacity);
-	memcpy(&vector->data[vector->size], data, sizeof(data[0]) * count);
-	vector->size += count;
+                                    const unsigned *data, size_t count) {
+  if (vector->size + count > vector->capacity) {
+    if (vector->capacity == 0)
+      vector->capacity = 4;
+    else
+      vector->capacity *= 2;
+    if (vector->capacity < vector->size + count)
+      vector->capacity = vector->size + count;
+    vector->data =
+        realloc(vector->data, sizeof(vector->data[0]) * vector->capacity);
+  }
+  memcpy(&vector->data[vector->size], data, sizeof(data[0]) * count);
+  vector->size += count;
 }
 
 /** Append a single message to the vector. */
@@ -64,66 +72,24 @@ struct wakeup_entry {
 
 /** A queue of suspended coros waiting to be woken up. */
 struct wakeup_queue {
-	struct coro **coros;
-    size_t size;
-    size_t capacity; // max size of queue
+    struct rlist coros;
 };
-
-
-static void wakeup_queue_free(struct wakeup_queue *queue)
-{
-	free(queue->coros);
-	queue->coros = NULL;
-	queue->size = 0;
-}
-
-static void wakeup_queue_add(struct wakeup_queue *queue, struct coro *c)
-{
- 	if (queue->size == queue->capacity)
-    {
- 		size_t new_capacity = queue->capacity ? 4 : queue->capacity * 2;
-        struct coro **new_coros = calloc(new_capacity, sizeof(*new_coros));
-        if (queue->coros)
-        {
-         	memcpy(new_coros, queue->coros, queue->size* sizeof(*new_coros));
-            free(queue->coros);
-        }
-        queue->coros = new_coros;
-        queue->capacity = new_capacity;
-    }
-	queue->coros[queue->size++] = c;
-}
-
-static void wakeup_queue_remove(struct wakeup_queue *queue, struct coro *c)
-{
-    for (size_t i = 0; i < queue->size; i++)
-    {
-     	if (queue->coros[i] == c)
-        {
-     		queue->coros[i] = queue->coros[--queue->size];
-            return;
-        }
-    }
-
-}
 
 /** Suspend the current coroutine until it is woken up. */
 static void wakeup_queue_suspend(struct wakeup_queue *queue)
 {
-	struct coro *this = coro_this();
-    wakeup_queue_add(queue, this);
+	struct wakeup_entry entry;
+	entry.coro = coro_this();
+	rlist_add_tail_entry(&queue->coros, &entry, base);
 	coro_suspend();
-	wakeup_queue_remove(queue, this);
+	rlist_del_entry(&entry, base);
 }
 
-static void wakeup_queue_wakeup_all(struct wakeup_queue *queue)
+static void wakeup_queue_wakeup_first(struct wakeup_queue *queue)
 {
-	for (size_t i = 0; i < queue->size; i++)
-    {
-    	coro_wakeup(queue->coros[i]);
-    }
-	queue->coros = NULL;
-	queue->size = 0;
+	if (rlist_empty(&queue->coros)) return;
+	struct wakeup_entry *entry = rlist_first_entry(&queue->coros, struct wakeup_entry, base);
+	coro_wakeup(entry->coro);
 }
 
 
@@ -137,7 +103,7 @@ struct coro_bus_channel {
 	/** Message queue. */
 	struct data_vector data;
 	/** Variable indicates if channel was closed or not */
-    bool is_closed;
+    	bool is_closed;
 };
 
 struct coro_bus {
@@ -148,9 +114,9 @@ struct coro_bus {
 static struct coro_bus_channel* get_channel_by_descriptor(struct coro_bus *bus, int descriptor)
 {
 	struct coro_bus_channel **channels = bus->channels;
-	if (bus->channel_count < descriptor || descriptor < 0 || !channels[descriptor - 1] || !channels[descriptor - 1]->is_closed)
+	if (bus->channel_count <= descriptor || descriptor < 0 || !channels[descriptor])
 		return NULL;
-    	return channels[descriptor - 1];
+    	return channels[descriptor];
 }
 
 static enum coro_bus_error_code global_error = CORO_BUS_ERR_NONE;
@@ -181,11 +147,9 @@ void coro_bus_delete(struct coro_bus *bus)
 	struct coro_bus_channel **channels = bus->channels;
     for (int i = 0; i < channel_count; i++)
     {
-        if (channels[i] != NULL)
-		{
+        if (channels[i])
+	{
              data_vector_free(&channels[i]->data);
-             wakeup_queue_free(&channels[i]->send_queue);
-             wakeup_queue_free(&channels[i]->recv_queue);
              free(channels[i]);
         }
     }
@@ -200,74 +164,105 @@ int coro_bus_channel_open(struct coro_bus *bus, size_t size_limit)
 	struct coro_bus_channel **channels = bus->channels;
     	struct coro_bus_channel *new_channel = calloc(1, sizeof(struct coro_bus_channel));
     	new_channel->size_limit = size_limit;
-    	new_channel->data.data = calloc(size_limit, sizeof(unsigned));
-	new_channel->data.capacity = size_limit;
+    	new_channel->data.data = calloc(1, sizeof(unsigned));
+	new_channel->data.capacity = 0;
 	new_channel->data.size = 0;
 	new_channel->is_closed = false;
+	rlist_create(&new_channel->recv_queue.coros);
+	rlist_create(&new_channel->send_queue.coros);
 
+	for (int i = 0; i < bus->channel_count; i++)
+	{
+		if (!channels[i])
+		{
+			channels[i] = new_channel;
+			return i;
+		}
+	}
 
     	channels = realloc(channels, (bus->channel_count + 1)*sizeof(*channels));
 	channels[bus->channel_count] = new_channel;
 	bus->channels = channels;
 	bus->channel_count = bus->channel_count + 1;
 
-    return bus->channel_count;
+    	return bus->channel_count - 1;
 }
 
 /* IMPLEMENTED */
 void coro_bus_channel_close(struct coro_bus *bus, int channel)
 {
-    coro_bus_errno_set(CORO_BUS_ERR_NONE);
     struct coro_bus_channel *cur_channel = get_channel_by_descriptor(bus, channel);
     if (!cur_channel)
     {
-        coro_bus_errno_set(CORO_BUS_ERR_NO_CHANNEL);
         return;
     }
     cur_channel->is_closed = true;
 
-    wakeup_queue_wakeup_all(&cur_channel->send_queue);
-    wakeup_queue_wakeup_all(&cur_channel->recv_queue);
-    coro_yield();
+    bus->channels[channel] = NULL;
+    coro_bus_errno_set(CORO_BUS_ERR_NO_CHANNEL);
+
+    while (!rlist_empty(&cur_channel->recv_queue.coros))
+    {
+	wakeup_queue_wakeup_first(&cur_channel->recv_queue);
+	coro_yield();
+    }
+
+    while (!rlist_empty(&cur_channel->send_queue.coros))
+    {
+        wakeup_queue_wakeup_first(&cur_channel->send_queue);
+        coro_yield();
+    }
 
     data_vector_free(&cur_channel->data);
     free(cur_channel);
-    bus->channels[channel - 1] = NULL;
 }
 
 /* IMPLEMENTED */
 int coro_bus_send(struct coro_bus *bus, int channel, unsigned data)
 {
 	coro_bus_errno_set(CORO_BUS_ERR_NONE);
-	struct coro_bus_channel *send_channel = get_channel_by_descriptor(bus, channel);
-	if (!send_channel) return -1;
-    while (send_channel->size_limit < send_channel->data.size)
-    {
-    	  wakeup_queue_suspend(&send_channel->send_queue);
-          if (send_channel->is_closed)
-          {
-          	coro_bus_errno_set(CORO_BUS_ERR_NO_CHANNEL);
-            return -1;
-          }
-    }
-    data_vector_append(&send_channel->data, data);
-	wakeup_queue_wakeup_all(&send_channel->recv_queue);
-    return 0;
+	while (true)
+	{
+		int res = coro_bus_try_send(bus, channel, data);
+		if (!res) return 0;
+
+		enum coro_bus_error_code err = coro_bus_errno();
+ 		if (err == CORO_BUS_ERR_NO_CHANNEL)
+		{
+      			coro_bus_errno_set(CORO_BUS_ERR_NO_CHANNEL);
+      			return -1;
+    		}
+		else if (err == CORO_BUS_ERR_WOULD_BLOCK)
+		{
+			struct coro_bus_channel *send_channel = get_channel_by_descriptor(bus, channel);
+			if (!send_channel)
+			{
+                        	coro_bus_errno_set(CORO_BUS_ERR_NO_CHANNEL);
+                        	return -1;
+			}
+			wakeup_queue_suspend(&send_channel->send_queue);
+		}
+	}
 }
 
 /* IMPLEMENTED */
 int coro_bus_try_send(struct coro_bus *bus, int channel, unsigned data)
 {
 	coro_bus_errno_set(CORO_BUS_ERR_NONE);
+	//printf("channel descriptor: %d\n", channel);
 	struct coro_bus_channel *send_channel = get_channel_by_descriptor(bus, channel);
-	if (!send_channel) return -1;
+	if (!send_channel)
+	{
+		coro_bus_errno_set(CORO_BUS_ERR_NO_CHANNEL);
+		return -1;
+	}
     if (send_channel->data.size == send_channel->size_limit)
     {
     	coro_bus_errno_set(CORO_BUS_ERR_WOULD_BLOCK);
         return -1;
     }
     data_vector_append(&send_channel->data, data);
-    wakeup_queue_wakeup_all(&send_channel->recv_queue);
+    wakeup_queue_wakeup_first(&send_channel->recv_queue);
     return 0;
 }
 
@@ -275,20 +270,18 @@ int coro_bus_try_send(struct coro_bus *bus, int channel, unsigned data)
 int coro_bus_recv(struct coro_bus *bus, int channel, unsigned *data)
 {
 	coro_bus_errno_set(CORO_BUS_ERR_NONE);
-	struct coro_bus_channel *recv_channel = get_channel_by_descriptor(bus, channel);
-	if (!recv_channel) return -1;
-	while (recv_channel->data.size == 0)
+	while (true)
 	{
-		wakeup_queue_suspend(&recv_channel->recv_queue);
-		if (recv_channel->is_closed)
+		if(!coro_bus_try_recv(bus, channel, data)) return 0;
+		if (coro_bus_errno() != CORO_BUS_ERR_WOULD_BLOCK) return -1;
+		struct coro_bus_channel *recv_channel = get_channel_by_descriptor(bus, channel);
+		if (!recv_channel)
 		{
 			coro_bus_errno_set(CORO_BUS_ERR_NO_CHANNEL);
 			return -1;
 		}
+		wakeup_queue_suspend(&recv_channel->recv_queue);
 	}
-	*data = data_vector_pop_first(&recv_channel->data);
-	wakeup_queue_wakeup_all(&recv_channel->send_queue);
-	return 0;
 }
 
 /* IMPLEMENTED */
@@ -296,14 +289,18 @@ int coro_bus_try_recv(struct coro_bus *bus, int channel, unsigned *data)
 {
 	coro_bus_errno_set(CORO_BUS_ERR_NONE);
 	struct coro_bus_channel *recv_channel = get_channel_by_descriptor(bus, channel);
-	if (!recv_channel) return -1;
+	if (!recv_channel)
+	{
+                 coro_bus_errno_set(CORO_BUS_ERR_NO_CHANNEL);
+                 return -1;
+	}
 	if (recv_channel->data.size == 0)
 	{
 		coro_bus_errno_set(CORO_BUS_ERR_WOULD_BLOCK);
 		return -1;
 	}
 	*data = data_vector_pop_first(&recv_channel->data);
-	wakeup_queue_wakeup_all(&recv_channel->send_queue);
+	wakeup_queue_wakeup_first(&recv_channel->send_queue);
 	return 0;
 }
 
