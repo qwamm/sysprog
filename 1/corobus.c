@@ -95,7 +95,7 @@ static void wakeup_queue_add(struct wakeup_queue *queue, struct coro *c)
 
 static void wakeup_queue_remove(struct wakeup_queue *queue, struct coro *c)
 {
-	for (int i = 0; i < queue->size; i++)
+    for (size_t i = 0; i < queue->size; i++)
     {
      	if (queue->coros[i] == c)
         {
@@ -144,12 +144,12 @@ struct coro_bus {
 	int channel_count;
 };
 
-static bool get_channel_by_descriptor(struct coro_bus *bus, int descriptor, struct coro_bus_channel *channel)
+static bool get_channel_by_descriptor(struct coro_bus *bus, int descriptor, struct coro_bus_channel **channel)
 {
 	struct coro_bus_channel **channels = bus->channels;
 	if (bus->channel_count < descriptor || descriptor < 0 || !channels[descriptor] || !channels[descriptor]->is_closed)
 		return false;
-    channel = channels[descriptor];
+    	*channel = channels[descriptor];
 	return true;
 }
 
@@ -238,7 +238,7 @@ int coro_bus_send(struct coro_bus *bus, int channel, unsigned data)
 {
 	coro_bus_errno_set(CORO_BUS_ERR_NONE);
 	struct coro_bus_channel *send_channel;
-	if (!get_channel_by_descriptor(bus, channel, send_channel)) return -1;
+	if (!get_channel_by_descriptor(bus, channel, &send_channel)) return -1;
     while (send_channel->size_limit < send_channel->data.size)
     {
     	  wakeup_queue_suspend(&send_channel->send_queue);
@@ -258,7 +258,7 @@ int coro_bus_try_send(struct coro_bus *bus, int channel, unsigned data)
 {
 	coro_bus_errno_set(CORO_BUS_ERR_NONE);
 	struct coro_bus_channel *send_channel;
-	if (!get_channel_by_descriptor(bus, channel, send_channel)) return -1;
+	if (!get_channel_by_descriptor(bus, channel, &send_channel)) return -1;
     if (send_channel->data.size == send_channel->size_limit)
     {
     	coro_bus_errno_set(CORO_BUS_ERR_WOULD_BLOCK);
@@ -274,7 +274,7 @@ int coro_bus_recv(struct coro_bus *bus, int channel, unsigned *data)
 {
 	coro_bus_errno_set(CORO_BUS_ERR_NONE);
 	struct coro_bus_channel *recv_channel;
-	if (!get_channel_by_descriptor(bus, channel, recv_channel)) return -1;
+	if (!get_channel_by_descriptor(bus, channel, &recv_channel)) return -1;
 	while (recv_channel->data.size == 0)
 	{
 		wakeup_queue_suspend(&recv_channel->recv_queue);
@@ -294,7 +294,7 @@ int coro_bus_try_recv(struct coro_bus *bus, int channel, unsigned *data)
 {
 	coro_bus_errno_set(CORO_BUS_ERR_NONE);
 	struct coro_bus_channel *recv_channel;
-	if (!get_channel_by_descriptor(bus, channel, recv_channel)) return -1;
+	if (!get_channel_by_descriptor(bus, channel, &recv_channel)) return -1;
 	if (recv_channel->data.size == 0)
 	{
 		coro_bus_errno_set(CORO_BUS_ERR_WOULD_BLOCK);
