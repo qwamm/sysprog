@@ -198,9 +198,8 @@ int coro_bus_channel_open(struct coro_bus *bus, size_t size_limit)
 {
 	coro_bus_errno_set(CORO_BUS_ERR_NONE);
 	struct coro_bus_channel **channels = bus->channels;
-    	struct coro_bus_channel *new_channel = calloc(1, sizeof(new_channel));
+    	struct coro_bus_channel *new_channel = calloc(1, sizeof(struct coro_bus_channel));
     	new_channel->size_limit = size_limit;
-    	printf("Cur size limit: %ld\n", size_limit);
     	new_channel->data.data = calloc(size_limit, sizeof(unsigned));
 	new_channel->data.capacity = size_limit;
 	new_channel->data.size = 0;
@@ -218,22 +217,22 @@ int coro_bus_channel_open(struct coro_bus *bus, size_t size_limit)
 /* IMPLEMENTED */
 void coro_bus_channel_close(struct coro_bus *bus, int channel)
 {
-	coro_bus_errno_set(CORO_BUS_ERR_NONE);
-    if (bus->channel_count < channel || channel < 0 || !bus->channels[channel])
+    coro_bus_errno_set(CORO_BUS_ERR_NONE);
+    struct coro_bus_channel *cur_channel = get_channel_by_descriptor(bus, channel);
+    if (!cur_channel)
     {
-    	coro_bus_errno_set(CORO_BUS_ERR_NO_CHANNEL);
+        coro_bus_errno_set(CORO_BUS_ERR_NO_CHANNEL);
         return;
     }
-	struct coro_bus_channel *cur_channel = bus->channels[channel - 1];
     cur_channel->is_closed = true;
 
-	wakeup_queue_wakeup_all(&cur_channel->send_queue);
-	wakeup_queue_wakeup_all(&cur_channel->recv_queue);
+    wakeup_queue_wakeup_all(&cur_channel->send_queue);
+    wakeup_queue_wakeup_all(&cur_channel->recv_queue);
     coro_yield();
 
     data_vector_free(&cur_channel->data);
     free(cur_channel);
-	bus->channels[channel - 1] = NULL;
+    bus->channels[channel - 1] = NULL;
 }
 
 /* IMPLEMENTED */
