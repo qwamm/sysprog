@@ -26,7 +26,7 @@ enum coro_bus_error_code coro_bus_errno(void);
 void coro_bus_errno_set(enum coro_bus_error_code err);
 
 /** Create a new messaging bus with no channels in it. */
-struct coro_bus coro_bus_new(void);
+struct coro_bus* coro_bus_new(void);
 
 /**
  * Destroy the bus and all its channels. The channels can not have
