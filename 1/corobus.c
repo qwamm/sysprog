@@ -4,6 +4,7 @@
 #include "rlist.h"
 
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
@@ -147,9 +148,9 @@ struct coro_bus {
 static bool get_channel_by_descriptor(struct coro_bus *bus, int descriptor, struct coro_bus_channel **channel)
 {
 	struct coro_bus_channel **channels = bus->channels;
-	if (bus->channel_count < descriptor || descriptor < 0 || !channels[descriptor] || !channels[descriptor]->is_closed)
+	if (bus->channel_count < descriptor || descriptor < 0 || !channels[descriptor - 1] || !channels[descriptor - 1]->is_closed)
 		return false;
-    	*channel = channels[descriptor];
+    	*channel = channels[descriptor - 1];
 	return true;
 }
 
@@ -198,13 +199,16 @@ int coro_bus_channel_open(struct coro_bus *bus, size_t size_limit)
 {
 	coro_bus_errno_set(CORO_BUS_ERR_NONE);
 	struct coro_bus_channel **channels = bus->channels;
-    struct coro_bus_channel *new_channel = calloc(1, sizeof(new_channel));
-    new_channel->size_limit = size_limit;
-    new_channel->data.data = calloc(size_limit, sizeof(*new_channel->data.data));
+    	struct coro_bus_channel *new_channel = calloc(1, sizeof(new_channel));
+    	new_channel->size_limit = size_limit;
+    	printf("Cur size limit: %ld\n", size_limit);
+    	new_channel->data.data = calloc(size_limit, sizeof(unsigned));
+	new_channel->data.capacity = size_limit;
+	new_channel->data.size = 0;
 	new_channel->is_closed = false;
 
 
-    channels = realloc(channels, (bus->channel_count + 1)*sizeof(*channels));
+    	channels = realloc(channels, (bus->channel_count + 1)*sizeof(*channels));
 	channels[bus->channel_count] = new_channel;
 	bus->channels = channels;
 	bus->channel_count = bus->channel_count + 1;
