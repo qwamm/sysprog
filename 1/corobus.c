@@ -65,13 +65,15 @@ static void data_vector_free(struct data_vector *vector)
  * One coroutine waiting to be woken up in a list of other
  * suspended coros.
  */
-struct wakeup_entry {
+struct wakeup_entry
+{
 	struct rlist base;
 	struct coro *coro;
 };
 
 /** A queue of suspended coros waiting to be woken up. */
-struct wakeup_queue {
+struct wakeup_queue
+{
     struct rlist coros;
 };
 
@@ -93,7 +95,8 @@ static void wakeup_queue_wakeup_first(struct wakeup_queue *queue)
 }
 
 
-struct coro_bus_channel {
+struct coro_bus_channel
+{
 	/** Channel max capacity. */
 	size_t size_limit;
 	/** Coroutines waiting until the channel is not full. */
@@ -106,7 +109,8 @@ struct coro_bus_channel {
     	bool is_closed;
 };
 
-struct coro_bus {
+struct coro_bus
+{
 	struct coro_bus_channel **channels;
 	int channel_count;
 };
@@ -135,7 +139,7 @@ void coro_bus_errno_set(enum coro_bus_error_code err)
 struct coro_bus* coro_bus_new(void)
 {
 	coro_bus_errno_set(CORO_BUS_ERR_NONE);
-	struct coro_bus *new_bus = calloc(1, sizeof(*new_bus));
+	struct coro_bus *new_bus = calloc(1, sizeof(struct coro_bus));
     return new_bus;
 }
 
@@ -145,16 +149,16 @@ void coro_bus_delete(struct coro_bus *bus)
 	coro_bus_errno_set(CORO_BUS_ERR_NONE);
 	int channel_count = bus->channel_count;
 	struct coro_bus_channel **channels = bus->channels;
-    for (int i = 0; i < channel_count; i++)
-    {
-        if (channels[i])
-	{
-             data_vector_free(&channels[i]->data);
-             free(channels[i]);
-        }
-    }
-    free(channels);
-    free(bus);
+    	for (int i = 0; i < channel_count; i++)
+    	{
+        	if (channels[i])
+		{
+             		data_vector_free(&channels[i]->data);
+             		free(channels[i]);
+        	}
+    	}
+    	free(channels);
+    	free(bus);
 }
 
 /* IMPLEMENTED */
@@ -307,24 +311,61 @@ int coro_bus_try_recv(struct coro_bus *bus, int channel, unsigned *data)
 
 #if NEED_BROADCAST
 
-int
-coro_bus_broadcast(struct coro_bus *bus, unsigned data)
+int coro_bus_broadcast(struct coro_bus *bus, unsigned data)
 {
-	/* IMPLEMENT THIS FUNCTION */
-	(void)bus;
-	(void)data;
-	coro_bus_errno_set(CORO_BUS_ERR_NOT_IMPLEMENTED);
-	return -1;
+        coro_bus_errno_set(CORO_BUS_ERR_NONE);
+        while (true)
+        {
+                int res = coro_bus_try_broadcast(bus, data);
+                if (!res) return 0;
+
+                enum coro_bus_error_code err = coro_bus_errno();
+                if (err == CORO_BUS_ERR_NO_CHANNEL)
+                {
+                        coro_bus_errno_set(CORO_BUS_ERR_NO_CHANNEL);
+                        return -1;
+                }
+                else if (err == CORO_BUS_ERR_WOULD_BLOCK)
+                {
+                        for (int i = 0; i < bus->channel_count; i++)
+        		{
+                		struct coro_bus_channel *cur_channel = get_channel_by_descriptor(bus, i);
+                		if(!cur_channel) continue;
+				if(cur_channel->data.size == cur_channel->size_limit)
+                			wakeup_queue_suspend(&cur_channel->send_queue);
+        		}
+                }
+        }
 }
 
-int
-coro_bus_try_broadcast(struct coro_bus *bus, unsigned data)
+int coro_bus_try_broadcast(struct coro_bus *bus, unsigned data)
 {
-	/* IMPLEMENT THIS FUNCTION */
-	(void)bus;
-	(void)data;
-	coro_bus_errno_set(CORO_BUS_ERR_NOT_IMPLEMENTED);
-	return -1;
+	coro_bus_errno_set(CORO_BUS_ERR_NONE);
+	bool no_channels = true;
+	for (int i = 0; i < bus->channel_count; i++)
+	{
+		struct coro_bus_channel *cur_channel = get_channel_by_descriptor(bus, i);
+		if(!cur_channel) continue;
+		if(no_channels) no_channels = false;
+		if(cur_channel->data.size == cur_channel->size_limit)
+		{
+				coro_bus_errno_set(CORO_BUS_ERR_WOULD_BLOCK);
+				return -1;
+		}
+	}
+	if (no_channels)
+	{
+		coro_bus_errno_set(CORO_BUS_ERR_NO_CHANNEL);
+		return -1;
+	}
+        for (int i = 0; i < bus->channel_count; i++)
+        {
+                struct coro_bus_channel *cur_channel = get_channel_by_descriptor(bus, i);
+                if(!cur_channel) continue;
+                data_vector_append(&cur_channel->data, data);
+                wakeup_queue_wakeup_first(&cur_channel->recv_queue);
+        }
+	return 0;
 }
 
 #endif
