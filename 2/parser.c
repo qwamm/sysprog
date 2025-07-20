@@ -30,8 +30,7 @@ struct token {
 	uint32_t capacity;
 };
 
-static char *
-token_strdup(const struct token *t)
+static char* token_strdup(const struct token *t)
 {
 	assert(t->type == TOKEN_TYPE_STR);
 	assert(t->size > 0);
@@ -41,8 +40,7 @@ token_strdup(const struct token *t)
 	return res;
 }
 
-static void
-token_append(struct token *t, char c)
+static void token_append(struct token *t, char c)
 {
 	if (t->size == t->capacity) {
 		t->capacity = (t->capacity + 1) * 2;
@@ -53,15 +51,13 @@ token_append(struct token *t, char c)
 	t->data[t->size++] = c;
 }
 
-static void
-token_reset(struct token *t)
+static void token_reset(struct token *t)
 {
 	t->size = 0;
 	t->type = TOKEN_TYPE_NONE;
 }
 
-static void
-command_append_arg(struct command *cmd, char *arg)
+static void command_append_arg(struct command *cmd, char *arg)
 {
 	if (cmd->arg_count == cmd->arg_capacity) {
 		cmd->arg_capacity = (cmd->arg_capacity + 1) * 2;
@@ -72,8 +68,7 @@ command_append_arg(struct command *cmd, char *arg)
 	cmd->args[cmd->arg_count++] = arg;
 }
 
-void
-command_line_delete(struct command_line *line)
+void command_line_delete(struct command_line *line)
 {
 	while (line->head != NULL) {
 		struct expr *e = line->head;
@@ -91,8 +86,7 @@ command_line_delete(struct command_line *line)
 	free(line);
 }
 
-static void
-command_line_append(struct command_line *line, struct expr *e)
+static void command_line_append(struct command_line *line, struct expr *e)
 {
 	if (line->head == NULL)
 		line->head = e;
@@ -101,14 +95,12 @@ command_line_append(struct command_line *line, struct expr *e)
 	line->tail = e;
 }
 
-struct parser *
-parser_new(void)
+struct parser *parser_new(void)
 {
 	return calloc(1, sizeof(struct parser));
 }
 
-void
-parser_feed(struct parser *p, const char *str, uint32_t len)
+void parser_feed(struct parser *p, const char *str, uint32_t len)
 {
 	uint32_t cap = p->capacity - p->size;
 	if (cap < len) {
@@ -123,8 +115,7 @@ parser_feed(struct parser *p, const char *str, uint32_t len)
 	assert(p->size <= p->capacity);
 }
 
-static void
-parser_consume(struct parser *p, uint32_t size)
+static void parser_consume(struct parser *p, uint32_t size)
 {
 	assert(p->size >= size);
 	if (size == p->size) {
@@ -135,8 +126,7 @@ parser_consume(struct parser *p, uint32_t size)
 	p->size -= size;
 }
 
-static uint32_t
-parse_token(const char *pos, const char *end, struct token *out)
+static uint32_t parse_token(const char *pos, const char *end, struct token *out)
 {
 	token_reset(out);
 	const char *begin = pos;
@@ -284,8 +274,7 @@ parse_token(const char *pos, const char *end, struct token *out)
 	return 0;
 }
 
-enum parser_error
-parser_pop_next(struct parser *p, struct command_line **out)
+enum parser_error parser_pop_next(struct parser *p, struct command_line **out)
 {
 	struct command_line *line = calloc(1, sizeof(*line));
 	char *pos = p->buffer;
@@ -434,8 +423,7 @@ return_final:
 	return res;
 }
 
-void
-parser_delete(struct parser *p)
+void parser_delete(struct parser *p)
 {
 	free(p->buffer);
 	free(p);

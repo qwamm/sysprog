@@ -54,17 +54,12 @@ struct command_line {
 	bool is_background;
 };
 
-void
-command_line_delete(struct command_line *line);
+void command_line_delete(struct command_line *line);
 
-struct parser *
-parser_new(void);
+struct parser* parser_new(void);
 
-void
-parser_feed(struct parser *p, const char *str, uint32_t len);
+void parser_feed(struct parser *p, const char *str, uint32_t len);
 
-enum parser_error
-parser_pop_next(struct parser *p, struct command_line **out);
+enum parser_error parser_pop_next(struct parser *p, struct command_line **out);
 
-void
-parser_delete(struct parser *p);
+void parser_delete(struct parser *p);
