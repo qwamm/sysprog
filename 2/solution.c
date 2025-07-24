@@ -10,9 +10,7 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <signal.h>
-#include <limits.h>
 #include <fcntl.h>
-#include <ctype.h>
 
 static void shut_down_error_messages()
 {
@@ -261,7 +259,6 @@ static int execute_piped_command(const struct command_line *line)
 	}
 
 	int status = 0;
-	int exit_index = -1;
 	for (int i = 0; i < cmd_count; i++) {
 		int cmd_status;
 		waitpid(pids[i], &cmd_status, 0);
