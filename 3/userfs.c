@@ -58,30 +58,38 @@ struct filedesc {
  */
 static struct filedesc **file_descriptors = NULL;
 static int file_descriptor_count = 0;
-static int file_descriptor_capacity = 0;
+static int file_descriptor_capacity = 65536;
 
-enum ufs_error_code
-ufs_errno()
+enum ufs_error_code ufs_errno()
 {
 	return ufs_error_code;
 }
 
-int
-ufs_open(const char *filename, int flags)
+int ufs_open(const char *filename, int flags)
 {
-	/* IMPLEMENT THIS FUNCTION */
-	(void)filename;
-	(void)flags;
-	(void)file_list;
-	(void)file_descriptors;
-	(void)file_descriptor_count;
-	(void)file_descriptor_capacity;
-	ufs_error_code = UFS_ERR_NOT_IMPLEMENTED;
-	return -1;
+	ufs_error_code = UFS_ERR_NO_ERR;
+	struct file *file_ptr = file_list;
+	while (file_ptr != NULL)
+	{
+		if (strcmp(file_ptr->name, filename) == 0)
+		{
+			struct filedesc *new_file_desc = malloc(sizeof(struct filedesc));
+			new_file_desc->file = file_ptr;
+			file_descriptors = realloc(file_descriptors, sizeof(struct filedesc*)*(++file_descriptor_count));
+			file_descriptors[file_descriptor_count-1] = file_ptr;
+			file_ptr->refs++;
+			return file_descriptor_count-1;
+		}
+		file_ptr = file_ptr->next;
+	}
+	if (flags != UFS_CREATE) {
+		ufs_error_code = UFS_ERR_NO_FILE;
+		return -1;
+	}
+	//...to be continued
 }
 
-ssize_t
-ufs_write(int fd, const char *buf, size_t size)
+ssize_t ufs_write(int fd, const char *buf, size_t size)
 {
 	/* IMPLEMENT THIS FUNCTION */
 	(void)fd;
