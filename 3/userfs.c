@@ -1,5 +1,6 @@
 #include "userfs.h"
 #include <stddef.h>
+#include <string.h>
 
 enum {
 	BLOCK_SIZE = 512,
@@ -18,8 +19,6 @@ struct block {
 	struct block *next;
 	/** Previous block in the file. */
 	struct block *prev;
-
-	/* PUT HERE OTHER MEMBERS */
 };
 
 struct file {
@@ -37,8 +36,6 @@ struct file {
 	/** Files are stored in a double-linked list. */
 	struct file *next;
 	struct file *prev;
-
-	/* PUT HERE OTHER MEMBERS */
 };
 
 /** List of all files. */
@@ -46,8 +43,6 @@ static struct file *file_list = NULL;
 
 struct filedesc {
 	struct file *file;
-
-	/* PUT HERE OTHER MEMBERS */
 };
 
 /**
@@ -65,6 +60,16 @@ enum ufs_error_code ufs_errno()
 	return ufs_error_code;
 }
 
+int create_file_descriptor(struct file *file_ptr)
+{
+        struct filedesc *new_file_desc = malloc(sizeof(struct filedesc));
+        new_file_desc->file = file_ptr;
+        file_descriptors = realloc(file_descriptors, sizeof(struct filedesc*)*(++file_descriptor_count));
+        file_descriptors[file_descriptor_count-1] = file_ptr;
+        file_ptr->refs++;
+        return file_descriptor_count-1;
+}
+
 int ufs_open(const char *filename, int flags)
 {
 	ufs_error_code = UFS_ERR_NO_ERR;
@@ -73,12 +78,7 @@ int ufs_open(const char *filename, int flags)
 	{
 		if (strcmp(file_ptr->name, filename) == 0)
 		{
-			struct filedesc *new_file_desc = malloc(sizeof(struct filedesc));
-			new_file_desc->file = file_ptr;
-			file_descriptors = realloc(file_descriptors, sizeof(struct filedesc*)*(++file_descriptor_count));
-			file_descriptors[file_descriptor_count-1] = file_ptr;
-			file_ptr->refs++;
-			return file_descriptor_count-1;
+			return create_file_descriptor(file_ptr);
 		}
 		file_ptr = file_ptr->next;
 	}
@@ -86,7 +86,14 @@ int ufs_open(const char *filename, int flags)
 		ufs_error_code = UFS_ERR_NO_FILE;
 		return -1;
 	}
-	//...to be continued
+	struct file *new_file = calloc(1, sizeof(struct file));
+	int filename_len = strlen(filename);
+	new_file->name = malloc(filename_len + 1);
+	strcpy(new_file->name, filename, filename_len + 1);
+	new_file->prev = file_list;
+	file_list->next = new_file;
+	file_list = file_list->next;
+	return create_file_descriptor(new_file);
 }
 
 ssize_t ufs_write(int fd, const char *buf, size_t size)
@@ -99,8 +106,7 @@ ssize_t ufs_write(int fd, const char *buf, size_t size)
 	return -1;
 }
 
-ssize_t
-ufs_read(int fd, char *buf, size_t size)
+ssize_t ufs_read(int fd, char *buf, size_t size)
 {
 	/* IMPLEMENT THIS FUNCTION */
 	(void)fd;
@@ -110,8 +116,7 @@ ufs_read(int fd, char *buf, size_t size)
 	return -1;
 }
 
-int
-ufs_close(int fd)
+int ufs_close(int fd)
 {
 	/* IMPLEMENT THIS FUNCTION */
 	(void)fd;
@@ -119,8 +124,7 @@ ufs_close(int fd)
 	return -1;
 }
 
-int
-ufs_delete(const char *filename)
+int ufs_delete(const char *filename)
 {
 	/* IMPLEMENT THIS FUNCTION */
 	(void)filename;
@@ -130,8 +134,7 @@ ufs_delete(const char *filename)
 
 #if NEED_RESIZE
 
-int
-ufs_resize(int fd, size_t new_size)
+int ufs_resize(int fd, size_t new_size)
 {
 	/* IMPLEMENT THIS FUNCTION */
 	(void)fd;
@@ -142,7 +145,4 @@ ufs_resize(int fd, size_t new_size)
 
 #endif
 
-void
-ufs_destroy(void)
-{
-}
+void ufs_destroy(void) {}
