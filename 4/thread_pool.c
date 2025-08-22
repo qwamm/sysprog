@@ -265,11 +265,6 @@ int thread_task_timed_join(struct thread_task *task, double timeout, void **resu
 
 	timeout_ts.tv_sec += seconds;
 	timeout_ts.tv_nsec += nanoseconds;
-	while (timeout_ts.tv_nsec >= 1e9)
-	{
-		timeout_ts.tv_sec++;
-		timeout_ts.tv_nsec -= 1e9;
-	}
 
 	pthread_mutex_lock(&task->mutex);
 
