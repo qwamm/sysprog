@@ -1,5 +1,7 @@
 #include "thread_pool.h"
 #include <stdlib.h>
+#include <time.h>
+#include <errno.h>
 #include <pthread.h>
 
 enum thread_task_state {
@@ -250,18 +252,46 @@ int thread_task_join(struct thread_task *task, void **result)
 
 #if NEED_TIMED_JOIN
 
-int
-thread_task_timed_join(struct thread_task *task, double timeout, void **result)
+int thread_task_timed_join(struct thread_task *task, double timeout, void **result)
 {
-	/* IMPLEMENT THIS FUNCTION */
-	(void)task;
-	(void)timeout;
-	(void)result;
-	return TPOOL_ERR_NOT_IMPLEMENTED;
+	if (task->state == TASK_STATE_NEW)
+		return TPOOL_ERR_TASK_NOT_PUSHED;
+
+	struct timespec timeout_ts;
+	clock_gettime(CLOCK_REALTIME, &timeout_ts);
+
+	time_t seconds = (time_t)timeout;
+	long nanoseconds = (long) ((timeout - seconds)*1e9);
+
+	timeout_ts.tv_sec += seconds;
+	timeout_ts.tv_nsec += nanoseconds;
+	while (timeout_ts.tv_nsec >= 1e9)
+	{
+		timeout_ts.tv_sec++;
+		timeout_ts.tv_nsec -= 1e9;
+	}
+
+	pthread_mutex_lock(&task->mutex);
+
+	while (task->state != TASK_STATE_FINISHED)
+	{
+		int wait_result = pthread_cond_timedwait(&task->cond, &task->mutex, &timeout_ts);
+		if (wait_result == ETIMEDOUT) {
+			pthread_mutex_unlock(&task->mutex);
+			return TPOOL_ERR_TIMEOUT;
+		}
+	}
+
+	*result = task->result;
+
+	pthread_mutex_unlock(&task->mutex);
+
+	return 0;
 }
 
 #endif
 
+/* IMPLEMENTED */
 int thread_task_delete(struct thread_task *task)
 {
 	pthread_mutex_lock(&task->mutex);
@@ -279,12 +309,27 @@ int thread_task_delete(struct thread_task *task)
 
 #if NEED_DETACH
 
-int
-thread_task_detach(struct thread_task *task)
+/* IMPLEMENTED */
+int thread_task_detach(struct thread_task *task)
 {
-	/* IMPLEMENT THIS FUNCTION */
-	(void)task;
-	return TPOOL_ERR_NOT_IMPLEMENTED;
+	pthread_mutex_lock(&task->mutex);
+
+	if (task->state == TASK_STATE_NEW)
+	{
+		pthread_mutex_unlock(&task->mutex);
+		return TPOOL_ERR_TASK_NOT_PUSHED;
+	}
+
+	if (task->state == TASK_STATE_FINISHED)
+	{
+		thread_task_destroy(task);
+	}
+
+	task->detached = true;
+
+	pthread_mutex_unlock(&task->mutex);
+
+	return 0;
 }
 
 #endif
