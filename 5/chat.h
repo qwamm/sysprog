@@ -34,19 +34,17 @@ enum chat_events {
 
 struct chat_message {
 #if NEED_AUTHOR
-	/** Author's name. */
+	/* Author's name. */
 	const char *author;
 #endif
-	/** 0-terminate text. */
+	/* 0-terminate text. */
 	char *data;
-
-	/* PUT HERE OTHER MEMBERS */
+	/* Message length */
+	size_t len;
 };
 
-/** Free message's memory. */
-void
-chat_message_delete(struct chat_message *msg);
+/* Free message's memory. */
+void chat_message_delete(struct chat_message *msg);
 
-/** Convert chat_events mask to events suitable for poll(). */
-int
-chat_events_to_poll_events(int mask);
+/* Convert chat_events mask to events suitable for poll(). */
+int chat_events_to_poll_events(int mask);
