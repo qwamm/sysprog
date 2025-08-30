@@ -1,40 +1,77 @@
 #include "chat.h"
 #include "chat_server.h"
+#include "array.h"
 
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/epoll.h>
+#include <sys/fcntl.h>
+#include <errno.h>
 
 struct chat_peer {
-	/** Client's socket. To read/write messages. */
+	/* Client's socket. To read/write messages. */
 	int socket;
-	/** Output buffer. */
-	/* ... */
-	/* PUT HERE OTHER MEMBERS */
+
+	/* Output buffer. */
+	struct array msgs_to_write;
+
+	/* Input buffer. */
+	struct chat_message *reading_msg;
+
+	/* Name of the client. */
+	char *name;
+
+	/* List node for storing at server list. */
+	struct rlist node;
+
+	/* Event struct for epoll. */
+	struct epoll_event ep_ev;
 };
 
 struct chat_server {
-	/** Listening socket. To accept new clients. */
+	/* Listening socket. To accept new clients. */
 	int socket;
-	/** Array of peers. */
-	/* ... */
-	/* PUT HERE OTHER MEMBERS */
+
+	/* Array of peers. */
+	struct rlist peer_head;
+
+	/* Array of received msgs. */
+	struct array feed_head;
+
+	/* Array of server feed msgs. */
+	struct array server_feed_head;
+
+	/* Epoll file descriptor. */
+	int epoll_fd;
+
+	/* Event struct for epoll. */
+	struct epoll_event ep_ev;
+
+	/* Incomplete message for server feed. */
+	char *feed_buf;
+
+	/* Length of incomplete message. */
+	size_t feed_buf_len;
 };
 
-struct chat_server *
-chat_server_new(void)
+/* IMPLEMENTED */
+struct chat_server *chat_server_new(void)
 {
 	struct chat_server *server = calloc(1, sizeof(*server));
 	server->socket = -1;
+	server->epoll_fd = -1;
 
-	/* IMPLEMENT THIS FUNCTION */
+	rlist_create(&server->peer_head);
+
+	array_init(&server->feed_head);
+	array_init(&server->server_feed_head);
 
 	return server;
 }
 
-void
-chat_server_delete(struct chat_server *server)
+void chat_server_delete(struct chat_server *server)
 {
 	if (server->socket >= 0)
 		close(server->socket);
