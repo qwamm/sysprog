@@ -113,8 +113,11 @@ server_pop_next_blocking_from(struct chat_server *s, struct chat_client *c)
 {
 	struct chat_message *msg;
 	while ((msg = chat_server_pop_next(s)) == NULL) {
+		//printf("XXX\n");
 		chat_client_update(c, 0);
+		//printf("YYY\n");
 		chat_server_update(s, 0);
+		//printf("ZZZ\n");
 	}
 	return msg;
 }
@@ -133,6 +136,7 @@ client_pop_next_blocking(struct chat_client *c, struct chat_server *s)
 {
 	struct chat_message *msg;
 	while ((msg = chat_client_pop_next(c)) == NULL) {
+		//printf("STUCK IN LOOP\n");
 		chat_client_update(c, 0);
 		chat_server_update(s, 0);
 	}
@@ -362,12 +366,13 @@ test_multi_client(void)
 	unit_msg("Say hello");
 	cli = clis[client_count - 1];
 	unit_fail_if(chat_client_feed(cli, "hello\n", 6) != 0);
-	msg = server_pop_next_blocking_from(s, cli);
+	msg = server_pop_next_blocking_from(s, cli);	
 	unit_fail_if(strcmp(msg->data, "hello") != 0);
 	chat_message_delete(msg);
 	for (int i = 0; i < client_count - 1; ++i) {
 		cli = clis[i];
 		msg = client_pop_next_blocking(cli, s);
+		//printf("HERE I AM\n");
 		unit_fail_if(strcmp(msg->data, "hello") != 0);
 		chat_message_delete(msg);
 	}

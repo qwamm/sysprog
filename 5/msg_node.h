@@ -5,5 +5,5 @@
 struct msg_node
 {
 	struct rlist node;
-	struct chat_msg *msg;
+	struct chat_message *msg;
 };

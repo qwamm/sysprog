@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/server.dir/chat.c.o CMakeFiles/server.dir/mnt/c/Users/anoni/sysprog/utils/heap_help/heap_help.c.o CMakeFiles/server.dir/chat_server.c.o CMakeFiles/server.dir/chat_server_exe.c.o -o server 

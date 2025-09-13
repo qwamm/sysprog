@@ -5,9 +5,11 @@
 
 void chat_message_delete(struct chat_message *msg)
 {
-	free(msg->data);
-	free(msg->author);
-	free(msg);
+	if (msg != NULL) {
+		free(msg->data);
+		free(msg->author);
+		free(msg);
+	}
 }
 
 int chat_events_to_poll_events(int mask)
