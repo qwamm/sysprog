@@ -1,1 +1,0 @@
-/usr/bin/cc CMakeFiles/client.dir/chat.c.o CMakeFiles/client.dir/mnt/c/Users/anoni/sysprog/utils/heap_help/heap_help.c.o CMakeFiles/client.dir/chat_client.c.o CMakeFiles/client.dir/chat_client_exe.c.o -o client 

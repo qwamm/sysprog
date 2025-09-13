@@ -1,5 +1,0 @@
-/mnt/c/Users/anoni/sysprog/5/CMakeFiles/client.dir
-/mnt/c/Users/anoni/sysprog/5/CMakeFiles/server.dir
-/mnt/c/Users/anoni/sysprog/5/CMakeFiles/test.dir
-/mnt/c/Users/anoni/sysprog/5/CMakeFiles/edit_cache.dir
-/mnt/c/Users/anoni/sysprog/5/CMakeFiles/rebuild_cache.dir

@@ -1,1 +1,0 @@
-/usr/bin/cc CMakeFiles/test.dir/chat.c.o CMakeFiles/test.dir/mnt/c/Users/anoni/sysprog/utils/heap_help/heap_help.c.o CMakeFiles/test.dir/chat_client.c.o CMakeFiles/test.dir/chat_server.c.o CMakeFiles/test.dir/test.c.o CMakeFiles/test.dir/mnt/c/Users/anoni/sysprog/utils/unit.c.o -o test 
